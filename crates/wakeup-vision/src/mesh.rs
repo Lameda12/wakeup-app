@@ -43,7 +43,9 @@ impl MeshModel {
         let n = INPUT as f32;
         let z_scale = roi.size / n;
         let points = raw
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .take(NUM_LANDMARKS)
             .map(|p| {
                 let (x, y) = roi.to_image(p[0] / n, p[1] / n);
