@@ -1,0 +1,29 @@
+[package]
+name = "wakeup-app"
+description = "The wakeup tray app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "wakeup"
+path = "src/main.rs"
+
+[features]
+default = ["download-binaries"]
+download-binaries = ["wakeup-vision/download-binaries"]
+load-dynamic = ["wakeup-vision/load-dynamic"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+anyhow.workspace = true
+rodio = { version = "0.23", default-features = false, features = ["playback"] }
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
+wakeup-core = { workspace = true, features = ["serde"] }
+wakeup-platform.workspace = true
+wakeup-vision = { workspace = true, features = ["camera"] }

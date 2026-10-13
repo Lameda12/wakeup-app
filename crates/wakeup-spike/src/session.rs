@@ -213,4 +213,12 @@ fn report(rows: &[Row], cpu_pct: f64) {
             "Some checks failed. Send this output + the CSV to Claude."
         }
     );
+
+    // Ready to paste into the app's config.json (see README).
+    let pitch_down = percentile(&pitches(&down), 0.5);
+    if !threshold.is_nan() && !neutral.is_nan() && !pitch_down.is_nan() {
+        println!(
+            "\nfor the app's config.json:\n  \"ear_closed\": {threshold:.3},\n  \"pitch_neutral\": {neutral:.1},\n  \"pitch_down\": {pitch_down:.1}"
+        );
+    }
 }

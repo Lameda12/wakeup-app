@@ -471,3 +471,48 @@ fn stalled_camera_does_not_fire_on_old_frames() {
         s.alarms()
     );
 }
+
+#[test]
+fn without_a_working_camera_the_idle_rule_still_runs() {
+    let mut s = Sim::new();
+    s.camera_works = false;
+    s.typing(1.0).run(89.5, |_| None);
+    assert_ne!(
+        s.state(),
+        State::Away,
+        "no frames at all means blind, not away"
+    );
+    s.run(1.0, |_| None);
+    assert!(s.has(Event::NudgeShown));
+    s.run(10.0, |_| None);
+    assert_eq!(s.first_alarm().1, AlarmReason::Idle);
+}
+
+#[test]
+fn camera_dying_mid_watch_does_not_fake_a_head_on_desk() {
+    let mut s = Sim::new();
+    s.typing(1.0)
+        .run(9.0, |_| Some(OPEN))
+        .run(2.0, |_| Some(CLOSED));
+    s.camera_works = false;
+    s.run(20.0, |_| None);
+    assert!(s.alarms().is_empty(), "{:?}", s.alarms());
+}
+
+#[test]
+fn test_alarm_can_be_triggered_and_dismissed() {
+    let mut s = Sim::new();
+    s.typing(2.0);
+    assert_eq!(
+        s.engine.trigger(s.t, AlarmReason::EyesClosed),
+        vec![Event::AlarmStarted(AlarmReason::EyesClosed)]
+    );
+    assert!(matches!(s.state(), State::Alarm { .. }));
+    assert!(
+        s.engine.trigger(s.t, AlarmReason::HeadDown).is_empty(),
+        "already ringing"
+    );
+    s.engine.start_typing();
+    s.run(2.0, |_| Some(OPEN));
+    assert!(s.engine.try_dismiss(s.t).is_ok());
+}

@@ -2,16 +2,41 @@
 
 A tray app that uses your webcam and keyboard/trackpad activity to catch you dozing or zoning out, then gets loud until you're back. macOS first, Linux after. Design: [DESIGN.md](DESIGN.md).
 
-Current milestone: **M0, detection spike.** It answers one question: on your face, camera and lighting, do open/closed eyes and normal/head-down separate cleanly?
+Status: **M0** (detection spike) ready for you to run; **M1** (the app) built and dogfoodable.
 
 ## Layout
 
 ```
+crates/wakeup-core       the state machine: idle time + face frames in, nudges/alarms out (pure, 35 tests)
 crates/wakeup-vision     camera → MediaPipe face models (ONNX) → eye openness (EAR), head pitch, roll
-crates/wakeup-platform   OS integration (M0: keyboard/trackpad idle time on macOS)
+crates/wakeup-platform   OS integration: idle time, volume override, window levels
 crates/wakeup-spike      M0 command-line tool
+src-tauri/               the tray app (Tauri 2): monitor loop, windows, sound, tray menu
+ui/                      alarm + nudge screens (React, Vite)
 models/                  ONNX face models, see models/README.md
 ```
+
+## Run the app (M1)
+
+**Easiest:** open the latest green [CI run](https://github.com/Lameda12/wakeup-app/actions), download the `wakeup-macos` artifact, unzip, then:
+
+```bash
+xattr -dr com.apple.quarantine wakeup.app   # unsigned build: clear the download flag
+open wakeup.app
+```
+
+An eye appears in the menu bar. Grant camera access when asked. Use **Test alarm** in the menu to try the dismiss flow.
+
+**From source:**
+
+```bash
+npm ci --prefix ui
+ui/node_modules/.bin/tauri dev
+```
+
+**Settings** live in `~/Library/Application Support/app.wakeup.desktop/config.json`, created on first launch. Paste the values the M0 session prints (`ear_closed`, `pitch_neutral`, `pitch_down`) and restart the app. Every alarm is logged to `events.jsonl` in the same folder.
+
+Not in M1 yet (M2): settings screen, guided calibration, meeting auto-pause, launch at login, mic detection. Debug switches: `WAKEUP_NO_CAMERA=1`, `WAKEUP_TEST_ALARM_AFTER=5`.
 
 ## Run M0 on your Mac
 
@@ -34,7 +59,7 @@ cargo run --release -p wakeup-spike -- session --tag glasses   --out glasses.csv
 cargo run --release -p wakeup-spike -- session --tag low-light --out low-light.csv   # room lights off, screen only
 ```
 
-Each run ends with PASS/FAIL checks and a perf line. Send me those printouts plus the CSVs.
+Each run ends with PASS/FAIL checks, a perf line, and values for the app's `config.json`. Send me those printouts plus the CSVs.
 
 **2. Idle time.** Run this, then type for a bit, stop, and watch the counter climb:
 
@@ -54,6 +79,7 @@ While a session runs, check Activity Monitor for `wakeup-spike` CPU %, to sanity
 ## Develop
 
 ```bash
+npm ci --prefix ui && npm run build --prefix ui   # the app embeds ui/dist at compile time
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```

@@ -1,5 +1,9 @@
-//! OS integration. M0 only needs idle time; volume, mic-in-use and overlay
-//! helpers land here in later milestones.
+//! OS integration: input idle time, volume override, and keeping the alarm
+//! window above everything. Mic-in-use (meeting detection) lands in M2.
+
+#[cfg(target_os = "macos")]
+pub mod macos;
+pub mod volume;
 
 /// Seconds since the last keyboard, mouse or trackpad event, or `None` where
 /// this platform isn't supported yet.

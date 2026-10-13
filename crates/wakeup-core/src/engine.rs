@@ -29,6 +29,7 @@ pub struct Input {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AlarmReason {
     EyesClosed,
     HeadDown,
@@ -39,6 +40,7 @@ pub enum AlarmReason {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PauseReason {
     Manual,
     Meeting,
@@ -117,8 +119,14 @@ pub struct Engine {
     frames: VecDeque<(f64, Frame)>,
     watching_since: f64,
     last_face_at: Option<f64>,
+    /// Last frame of any kind. No recent frames means the camera is broken or
+    /// busy: face rules can't run, so don't mistake it for an empty room.
+    last_frame_at: Option<f64>,
     typing: Option<Typing>,
 }
+
+/// Seconds without any frame before the engine treats the camera as blind.
+const BLIND_AFTER: f64 = 2.0;
 
 impl Engine {
     pub fn new(cfg: Config) -> Self {
@@ -128,6 +136,7 @@ impl Engine {
             frames: VecDeque::new(),
             watching_since: 0.0,
             last_face_at: None,
+            last_frame_at: None,
             typing: None,
         }
     }
@@ -222,7 +231,8 @@ impl Engine {
         }
 
         let face_now = matches!(self.frames.back(), Some((t, Frame::Face(_))) if *t >= now - 1e-9);
-        if !face_now {
+        let blind = self.last_frame_at.is_none_or(|t| now - t > BLIND_AFTER);
+        if !face_now && !blind {
             let lost_at = self.last_face_at.unwrap_or(self.watching_since);
             let lost_for = now - lost_at;
             if lost_for >= self.cfg.lost_while_drowsy_after && self.was_drooping(lost_at) {
@@ -238,7 +248,7 @@ impl Engine {
         match nudge_since {
             // Only if you're still in front of the screen; if you left, the
             // away rule above takes over instead.
-            Some(since) if now - since >= self.cfg.nudge_timeout && face_now => {
+            Some(since) if now - since >= self.cfg.nudge_timeout && (face_now || blind) => {
                 return self.alarm(now, AlarmReason::Idle, events);
             }
             None if input
@@ -251,6 +261,18 @@ impl Engine {
             _ => {}
         }
         events
+    }
+
+    /// Starts an alarm now, e.g. "test alarm" from the menu. No-op if one is
+    /// already ringing.
+    pub fn trigger(&mut self, now: f64, reason: AlarmReason) -> Vec<Event> {
+        let mut events = vec![];
+        match self.state {
+            State::Alarm { .. } => return events,
+            State::Nudge { .. } => events.push(Event::NudgeCleared),
+            _ => {}
+        }
+        self.alarm(now, reason, events)
     }
 
     /// First keystroke of the dismiss phrase: start checking that eyes stay open.
@@ -307,6 +329,7 @@ impl Engine {
     }
 
     fn record(&mut self, now: f64, frame: Frame) {
+        self.last_frame_at = Some(now);
         if let Frame::Face(_) = frame {
             self.last_face_at = Some(now);
         }
@@ -337,6 +360,7 @@ impl Engine {
         self.state = State::Active;
         self.frames.clear();
         self.last_face_at = None;
+        self.last_frame_at = None;
         self.typing = None;
     }
 
@@ -345,6 +369,7 @@ impl Engine {
         self.watching_since = now;
         self.frames.clear();
         self.last_face_at = None;
+        self.last_frame_at = None;
     }
 
     fn alarm(&mut self, now: f64, reason: AlarmReason, mut events: Vec<Event>) -> Vec<Event> {

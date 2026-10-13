@@ -1,0 +1,209 @@
+:root {
+  --ink: #0a0a0a;
+  --fg: #e5e5e5;
+  --dim: #737373;
+  --faint: #404040;
+  --alarm: #ff3b30;
+  color-scheme: dark;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--ink);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.bad {
+  color: var(--alarm);
+}
+
+/* ---------- alarm ---------- */
+
+.alarm {
+  position: relative;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  animation: flash 1s steps(1) infinite;
+}
+
+/* A full-bleed red frame that pulses: visible even from across the room. */
+.alarm-frame {
+  position: absolute;
+  inset: 0;
+  border: 14px solid var(--alarm);
+  animation: blink 0.5s steps(1) infinite;
+  pointer-events: none;
+}
+
+@keyframes blink {
+  50% {
+    border-color: transparent;
+  }
+}
+
+@keyframes flash {
+  0% {
+    background: #1a0402;
+  }
+  50% {
+    background: var(--ink);
+  }
+}
+
+.alarm-body {
+  width: min(880px, 100% - 64px);
+}
+
+.alarm-meta {
+  font-size: 14px;
+  color: var(--alarm);
+}
+
+.alarm-title {
+  margin-top: 16px;
+  font-size: clamp(64px, 12vw, 168px);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--alarm);
+}
+
+.alarm-reason {
+  margin-top: 20px;
+  font-size: 22px;
+  color: var(--fg);
+}
+
+.alarm-instruction {
+  margin-top: 56px;
+  font-size: 15px;
+  color: var(--dim);
+}
+
+.phrase {
+  margin-top: 12px;
+  font-size: 28px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.phrase-ok {
+  color: var(--fg);
+}
+
+.phrase-bad {
+  color: var(--ink);
+  background: var(--alarm);
+}
+
+.phrase-todo {
+  color: var(--faint);
+}
+
+.prompt {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--faint);
+  padding: 14px 16px;
+}
+
+.prompt:focus-within {
+  border-color: var(--alarm);
+}
+
+.caret {
+  color: var(--alarm);
+  font-size: 22px;
+}
+
+.prompt input {
+  flex: 1;
+  font: inherit;
+  font-size: 22px;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  outline: none;
+  caret-color: var(--alarm);
+}
+
+.status {
+  margin-top: 14px;
+  min-height: 1.4em;
+  font-size: 15px;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.dot-ok {
+  background: var(--fg);
+}
+
+.dot-bad {
+  background: var(--alarm);
+}
+
+/* ---------- nudge ---------- */
+
+.nudge {
+  height: 100%;
+  padding: 18px 20px;
+  border: 1px solid var(--faint);
+  border-left: 3px solid var(--alarm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nudge-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.nudge-text {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.nudge-bar {
+  margin-top: auto;
+  height: 3px;
+  background: var(--faint);
+}
+
+.nudge-bar-fill {
+  height: 100%;
+  background: var(--alarm);
+  transition: width 0.1s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm,
+  .alarm-frame {
+    animation: none;
+  }
+}

@@ -1,6 +1,6 @@
 # wakeup: app design
 
-Status: **approved 2026-10-13. M0 in progress.**
+Status: **approved 2026-10-13. M0 waiting on a run on your Mac; M1 built.**
 
 Decisions: Rust core + Tauri, macOS first then Linux (GNOME, KDE, wlroots/tiling), camera only on when input is idle, "still here?" nudge before the idle alarm, direct download + Lemon Squeezy license keys. Linux test machine: decide at M4.
 
@@ -39,11 +39,14 @@ ACTIVE ── idle ≥ 8s ──▶ WATCHING (camera on, ~10 fps)
   │                       │ idle ≥ 90s, face present ─────▶ NUDGE ── 10s no input ──▶ ALARM(idle)
   │                       │ no face ≥ 10s ────────────────▶ AWAY (camera 1 fps, no alarms)
   └──── any input ────────┘
-ALARM ──▶ DISMISSING (phrase typed + eyes open) ──▶ COOLDOWN 30s ──▶ ACTIVE
+ALARM ──▶ DISMISSING (phrase typed + eyes open) ──▶ ACTIVE
 PAUSED: manual pause (15/30/60 min), meeting detected, or outside active hours
 ```
 
 - **AWAY:** walking away from the desk never fires the alarm.
+- **Blind camera ≠ away.** No frames at all (permission denied, camera busy or broken) means the face rules can't run, so only the idle rule does. Without this, a broken camera would read as an empty room and silence everything.
+- **Streaks, not percentages.** "Eyes closed 2.5s" means a continuous run of closed frames, tolerating misread gaps under 0.3s. An earlier "80% of the last 2.5s" version fired after 2.0s and on 2s-on/2s-off squinting; tests caught it.
+- No cooldown state after dismissing: you just typed, so you're ACTIVE, and the normal camera gate takes over.
 - **Face lost mid-droop is not AWAY.** The detector can't find a face turned fully sideways (head down on the desk, cheek on the arm). Found in M0 testing: tracking follows a tilt up to ~60° within 2-3 frames, but at 90° the face is lost. So if the face disappears while idle and the last samples showed eyes closing, pitch dropping or roll growing, treat it as dozing, not AWAY.
 - **NUDGE:** quiet "still here?" card with a soft chime. Any key or trackpad movement clears it.
 - **Meetings:** auto-pause while another app is using the mic.
@@ -128,3 +131,11 @@ Performance target: < 1% CPU in ACTIVE, < 8% in WATCHING on an M2 `[Speculation,
 Built: `wakeup-vision` (detector + face mesh + EAR/pitch/roll, frame-to-frame tracking), `wakeup-platform` (macOS idle time), `wakeup-spike` CLI with a guided calibration session. 15 tests, including end-to-end runs of the real models on a test face (open-eye EAR ~0.32, roll correct under mirror and 45° tilt, re-detects after the face leaves).
 
 Not yet verified (needs your Mac): closed-eye EAR, head-down pitch sign and size, camera capture on macOS, idle time, CPU on an M2. That's what `wakeup-spike session` measures. See README.
+
+## 12. M1 status
+
+Built: `wakeup-core` engine (35 scenario tests), the Tauri tray app (10 Hz monitor loop, camera gating, full-screen alarm on every display at screen-saver level on macOS, synthesized escalating siren, volume override and restore, "still here?" nudge with chime, phrase dismiss verified against the camera, pause 15/60 min, test alarm, `config.json`, `events.jsonl`), and CI that produces an unsigned `wakeup.app`.
+
+Verified here: the whole alarm flow runs in the real app on Linux under a virtual display (alarm fires, wrong text is highlighted, the correct phrase dismisses, events are logged). Not verified: anything on real macOS hardware, including window level over full-screen apps, the camera prompt from the .app bundle, and the volume override.
+
+Known M1 limits: thresholds come from `config.json` (no settings screen or calibration UI yet), the nudge window may take keyboard focus on macOS, and Linux has no idle time yet (camera stays on, no idle rule) until M4.

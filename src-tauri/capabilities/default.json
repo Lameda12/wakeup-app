@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Alarm and nudge windows: receive events and call the app's commands.",
+  "windows": ["alarm-*", "nudge"],
+  "permissions": ["core:default"]
+}

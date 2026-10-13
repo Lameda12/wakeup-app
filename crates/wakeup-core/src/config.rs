@@ -1,5 +1,10 @@
 /// Every threshold the engine uses. Times are in seconds.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 pub struct Config {
     /// Input idle time before the camera turns on. 0 = camera always on.
     pub camera_gate: f64,

@@ -5,3 +5,6 @@
 !crates/**/testdata/*.csv
 /annotated*.png
 .env*
+/ui/node_modules
+/ui/dist
+/src-tauri/gen
