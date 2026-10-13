@@ -251,9 +251,10 @@ impl Engine {
             Some(since) if now - since >= self.cfg.nudge_timeout && (face_now || blind) => {
                 return self.alarm(now, AlarmReason::Idle, events);
             }
-            None if input
-                .idle
-                .is_some_and(|idle| idle >= self.cfg.idle_nudge_after) =>
+            None if self.cfg.idle_nudge_after > 0.0
+                && input
+                    .idle
+                    .is_some_and(|idle| idle >= self.cfg.idle_nudge_after) =>
             {
                 self.state = State::Nudge { since: now };
                 events.push(Event::NudgeShown);
@@ -326,6 +327,22 @@ impl Engine {
             return vec![Event::Resumed];
         }
         vec![]
+    }
+
+    /// For pauses driven by the outside world (a meeting started, active
+    /// hours ended): call it whenever the condition is re-checked. Never
+    /// overrides another pause or an alarm, and only lifts its own pause.
+    pub fn set_external_pause(&mut self, reason: PauseReason, active: bool) -> Vec<Event> {
+        match (self.state, active) {
+            (
+                State::Paused {
+                    reason: current, ..
+                },
+                false,
+            ) if current == reason => self.resume(),
+            (State::Paused { .. } | State::Alarm { .. }, _) | (_, false) => vec![],
+            (_, true) => self.pause(reason, None).unwrap_or_default(),
+        }
     }
 
     fn record(&mut self, now: f64, frame: Frame) {

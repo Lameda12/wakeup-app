@@ -80,3 +80,110 @@ export function onEyes(cb: (eyes: Eyes) => void): () => void {
   const id = setInterval(() => cb(Date.now() % 5000 < 600 ? "closed" : "open"), 200);
   return () => clearInterval(id);
 }
+
+// ---------- settings & calibration ----------
+
+export interface ActiveHours {
+  start: string;
+  end: string;
+  /** ISO weekdays, 1 = Monday ... 7 = Sunday. */
+  days: number[];
+}
+
+/** Mirrors the Rust `Settings` (engine thresholds are flattened in). */
+export interface Settings {
+  camera_gate: number;
+  ear_closed: number;
+  eyes_closed_for: number;
+  pitch_neutral: number;
+  pitch_down: number;
+  head_down_for: number;
+  idle_nudge_after: number;
+  nudge_timeout: number;
+  calibrated: boolean;
+  onboarded: boolean;
+  launch_at_login: boolean;
+  meeting_pause: boolean;
+  active_hours_enabled: boolean;
+  active_hours: ActiveHours;
+  /** Engine fields the UI doesn't edit, passed through untouched. */
+  [other: string]: unknown;
+}
+
+export interface CalibrationResult {
+  ear_closed: number;
+  ear_open_typical: number;
+  ear_shut_typical: number;
+  pitch_neutral: number;
+  pitch_down: number | null;
+  warnings: string[];
+}
+
+export type Phase = "open" | "closed" | "down";
+export interface CalibFrame {
+  face: boolean;
+  ear: number | null;
+}
+
+type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
+async function call<T>(cmd: string, args?: Record<string, unknown>, fake?: () => T): Promise<Result<T>> {
+  try {
+    const value = inTauri ? await invoke<T>(cmd, args) : (fake ? fake() : (undefined as T));
+    return { ok: true, value };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+let fakeSettings: Settings = {
+  camera_gate: 8,
+  ear_closed: 0.2,
+  eyes_closed_for: 2.5,
+  pitch_neutral: 10,
+  pitch_down: 35,
+  head_down_for: 3,
+  idle_nudge_after: 90,
+  nudge_timeout: 10,
+  calibrated: true,
+  onboarded: true,
+  launch_at_login: true,
+  meeting_pause: true,
+  active_hours_enabled: true,
+  active_hours: { start: "09:00", end: "18:00", days: [1, 2, 3, 4, 5] },
+};
+
+export const getSettings = () => call<Settings>("get_settings", undefined, () => fakeSettings);
+export const saveSettings = (settings: Settings) =>
+  call<Settings>("save_settings", { settings }, () => (fakeSettings = settings));
+
+export const calibrationStart = () => call<void>("calibration_start");
+export const calibrationPhase = (phase: Phase) => call<void>("calibration_phase", { phase });
+export const calibrationFinish = () =>
+  call<CalibrationResult>("calibration_finish", undefined, () => ({
+    ear_closed: 0.19,
+    ear_open_typical: 0.31,
+    ear_shut_typical: 0.08,
+    pitch_neutral: 9,
+    pitch_down: 33,
+    warnings: [],
+  }));
+export const calibrationCancel = () => call<void>("calibration_cancel");
+export const finishOnboarding = (launchAtLogin: boolean) =>
+  call<void>("finish_onboarding", { launchAtLogin });
+export const testAlarm = () => call<void>("test_alarm");
+export const openCalibration = () => call<void>("open_calibration");
+export const chime = () => call<void>("chime");
+
+export function onCalibFrame(cb: (frame: CalibFrame) => void): () => void {
+  if (inTauri) return on("calib-frame", cb);
+  const id = setInterval(() => cb({ face: true, ear: 0.28 + Math.random() * 0.04 }), 100);
+  return () => clearInterval(id);
+}
+
+/** Hides the current window (settings/onboarding are reused, never closed). */
+export async function hideWindow(): Promise<void> {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().hide();
+}

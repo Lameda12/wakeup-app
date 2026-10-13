@@ -2,21 +2,21 @@
 
 A tray app that uses your webcam and keyboard/trackpad activity to catch you dozing or zoning out, then gets loud until you're back. macOS first, Linux after. Design: [DESIGN.md](DESIGN.md).
 
-Status: **M0** (detection spike) ready for you to run; **M1** (the app) built and dogfoodable.
+Status: **M0** (detection spike) ready for you to run; **M1 + M2** (the app, with setup, calibration and settings) built and dogfoodable.
 
 ## Layout
 
 ```
-crates/wakeup-core       the state machine: idle time + face frames in, nudges/alarms out (pure, 35 tests)
+crates/wakeup-core       state machine, calibration math, active-hours schedule (pure, 52 tests)
 crates/wakeup-vision     camera → MediaPipe face models (ONNX) → eye openness (EAR), head pitch, roll
-crates/wakeup-platform   OS integration: idle time, volume override, window levels
+crates/wakeup-platform   OS integration: idle time, mic-in-use, volume override, window levels
 crates/wakeup-spike      M0 command-line tool
 src-tauri/               the tray app (Tauri 2): monitor loop, windows, sound, tray menu
-ui/                      alarm + nudge screens (React, Vite)
+ui/                      alarm, nudge, onboarding/calibration and settings screens (React, Vite)
 models/                  ONNX face models, see models/README.md
 ```
 
-## Run the app (M1)
+## Run the app
 
 **Easiest:** open the latest green [CI run](https://github.com/Lameda12/wakeup-app/actions), download the `wakeup-macos` artifact, unzip, then:
 
@@ -25,7 +25,7 @@ xattr -dr com.apple.quarantine wakeup.app   # unsigned build: clear the download
 open wakeup.app
 ```
 
-An eye appears in the menu bar. Grant camera access when asked. Use **Test alarm** in the menu to try the dismiss flow.
+First launch opens setup: a 20-second calibration (eyes open, closed, looking down) and the "open at login" choice. Grant camera access when asked. After that it lives in the menu bar (the eye): pause, test alarm, and **Settings…** for timings, active hours, call pausing and recalibration.
 
 **From source:**
 
@@ -34,9 +34,9 @@ npm ci --prefix ui
 ui/node_modules/.bin/tauri dev
 ```
 
-**Settings** live in `~/Library/Application Support/app.wakeup.desktop/config.json`, created on first launch. Paste the values the M0 session prints (`ear_closed`, `pitch_neutral`, `pitch_down`) and restart the app. Every alarm is logged to `events.jsonl` in the same folder.
+Settings are saved to `~/Library/Application Support/app.wakeup.desktop/config.json`; every alarm is logged to `events.jsonl` in the same folder. Nothing is sent anywhere (ONNX Runtime's built-in telemetry is switched off at startup).
 
-Not in M1 yet (M2): settings screen, guided calibration, meeting auto-pause, launch at login, mic detection. Debug switches: `WAKEUP_NO_CAMERA=1`, `WAKEUP_TEST_ALARM_AFTER=5`.
+Debug switches: `WAKEUP_NO_CAMERA=1`, `WAKEUP_FAKE_CAMERA=face.jpg` (a still image as the camera, reloaded when the file changes), `WAKEUP_TEST_ALARM_AFTER=5`.
 
 ## Run M0 on your Mac
 

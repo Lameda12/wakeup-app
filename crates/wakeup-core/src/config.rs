@@ -30,6 +30,7 @@ pub struct Config {
     pub agreement: f32,
 
     /// No input this long (face present) shows the "still here?" nudge.
+    /// 0 turns the idle rule off.
     pub idle_nudge_after: f64,
     /// Nudge ignored this long fires the alarm.
     pub nudge_timeout: f64,

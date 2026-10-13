@@ -2,74 +2,46 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod calibration;
+mod commands;
 mod monitor;
+mod settings;
 mod state;
 mod store;
 mod tray;
 mod windows;
 
-use tauri::{Manager, State as TauriState};
-use wakeup_core::{DismissError, Engine, matches_phrase};
+use tauri::Manager;
+use tauri_plugin_autostart::MacosLauncher;
 
 use crate::audio::Audio;
-use crate::state::{AlarmView, Ctx, NudgeView, Shared};
+use crate::state::{Ctx, Shared};
 use crate::store::EventLog;
 
-#[tauri::command]
-fn alarm_info(ctx: TauriState<'_, Ctx>) -> Option<AlarmView> {
-    ctx.lock().alarm.clone()
-}
-
-#[tauri::command]
-fn nudge_info(ctx: TauriState<'_, Ctx>) -> Option<NudgeView> {
-    ctx.lock().nudge.clone()
-}
-
-/// First keystroke of the phrase: from here on the camera checks your eyes.
-#[tauri::command]
-fn typing_started(ctx: TauriState<'_, Ctx>) {
-    ctx.lock().engine.start_typing();
-}
-
-#[tauri::command]
-fn submit_phrase(ctx: TauriState<'_, Ctx>, text: String) -> Result<(), String> {
-    let ctx = ctx.inner().clone();
-    let result = {
-        let mut shared = ctx.lock();
-        let phrase = shared
-            .alarm
-            .as_ref()
-            .map(|a| a.phrase.clone())
-            .ok_or("no alarm is ringing")?;
-        if !matches_phrase(&text, &phrase) {
-            return Err("that's not the phrase. try again.".into());
-        }
-        let now = shared.now();
-        shared.engine.try_dismiss(now)
-    };
-    match result {
-        Ok(events) => {
-            monitor::apply(&ctx, events);
-            Ok(())
-        }
-        Err(DismissError::EyesNotOpen { open_fraction }) => {
-            ctx.log.failed_dismiss(open_fraction);
-            Err(format!(
-                "your eyes were open only {:.0}% of the time. type it again, eyes open.",
-                open_fraction * 100.0
-            ))
-        }
-        Err(DismissError::NoAlarm) => Err("no alarm is ringing".into()),
-    }
-}
-
 fn main() {
+    // SAFETY: first statement of main; no other threads exist yet.
+    unsafe { wakeup_vision::disable_onnx_telemetry() };
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
-            alarm_info,
-            nudge_info,
-            typing_started,
-            submit_phrase
+            commands::alarm_info,
+            commands::nudge_info,
+            commands::typing_started,
+            commands::submit_phrase,
+            commands::get_settings,
+            commands::save_settings,
+            commands::calibration_start,
+            commands::calibration_phase,
+            commands::calibration_finish,
+            commands::calibration_cancel,
+            commands::finish_onboarding,
+            commands::test_alarm,
+            commands::open_calibration,
+            commands::chime,
         ])
         .setup(|app| {
             // Menu bar app: no Dock icon, no app switcher entry.
@@ -77,14 +49,22 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let handle = app.handle().clone();
-            let config = store::load_config(&app.path().app_config_dir()?);
+            let config_dir = app.path().app_config_dir()?;
+            let settings = store::load_settings(&config_dir);
             let log = EventLog::new(&app.path().app_data_dir()?);
             let status = tray::setup(&handle)?;
             windows::setup(&handle)?;
 
+            if settings.onboarded {
+                // Keep the login item in sync with the setting (e.g. after a reinstall).
+                commands::set_autostart(&handle, settings.launch_at_login);
+            } else {
+                windows::open_onboarding(&handle, "onboarding");
+            }
+
             let ctx = Ctx::new(
                 handle,
-                Shared::new(Engine::new(config)),
+                Shared::new(settings, config_dir),
                 Audio::spawn(),
                 log,
                 status,
@@ -98,6 +78,15 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label() == "onboarding" {
+                    // Leaving setup midway must not leave the camera on.
+                    if let Some(ctx) = window.app_handle().try_state::<Ctx>() {
+                        let mut shared = ctx.lock();
+                        if shared.calibration.take().is_some() {
+                            shared.restart_engine();
+                        }
+                    }
+                }
                 if !window.label().starts_with("alarm-") {
                     let _ = window.hide();
                 }

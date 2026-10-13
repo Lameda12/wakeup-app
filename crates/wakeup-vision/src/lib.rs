@@ -18,6 +18,23 @@ use anyhow::{Result, anyhow};
 use ort::environment::Environment;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 
+/// Stops ONNX Runtime's built-in usage telemetry. Microsoft's official builds
+/// include a client that posts to mobile.events.data.microsoft.com, and the
+/// API-level switch (`with_telemetry(false)`) doesn't stop the connections;
+/// only this variable does (measured: 3 attempts per 25s without it, 0 with).
+/// Leaves an explicit user setting alone.
+///
+/// # Safety
+/// Call at the very start of `main`, before any other thread exists:
+/// changing the environment while another thread reads it is undefined
+/// behavior.
+pub unsafe fn disable_onnx_telemetry() {
+    if std::env::var_os("ORT_DISABLE_TELEMETRY").is_none() {
+        // SAFETY: the caller guarantees the process is still single-threaded.
+        unsafe { std::env::set_var("ORT_DISABLE_TELEMETRY", "1") };
+    }
+}
+
 /// ONNX Runtime allows a single environment per process, but pipelines get
 /// rebuilt (after pauses, in tests), so create it once and share it.
 fn environment() -> Result<Environment> {
@@ -28,7 +45,11 @@ fn environment() -> Result<Environment> {
     if let Some(env) = env.as_ref() {
         return Ok(env.clone());
     }
-    let created = ort::init().with_name("wakeup").build()?;
+    // Belt and braces with `disable_onnx_telemetry`: nothing leaves the machine.
+    let created = ort::init()
+        .with_name("wakeup")
+        .with_telemetry(false)
+        .build()?;
     *env = Some(created.clone());
     Ok(created)
 }

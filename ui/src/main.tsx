@@ -5,12 +5,22 @@ import "@fontsource/jetbrains-mono/700.css";
 import "./styles.css";
 import { Alarm } from "./Alarm";
 import { Nudge } from "./Nudge";
+import { Onboarding } from "./Onboarding";
+import { Settings } from "./Settings";
 
 // Each native window loads this page with a different hash.
 const view = location.hash.replace(/^#/, "") || "alarm";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {view === "nudge" ? <Nudge /> : <Alarm primary={view !== "alarm-secondary"} />}
+    {view === "nudge" ? (
+      <Nudge />
+    ) : view === "settings" ? (
+      <Settings />
+    ) : view === "onboarding" || view === "calibrate" ? (
+      <Onboarding mode={view} />
+    ) : (
+      <Alarm primary={view !== "alarm-secondary"} />
+    )}
   </StrictMode>,
 );

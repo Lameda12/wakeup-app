@@ -6,38 +6,43 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde_json::json;
-use wakeup_core::{AlarmReason, Config};
+use wakeup_core::AlarmReason;
 
+use crate::settings::Settings;
 use crate::state::wall_ms;
 
 /// Loads `config.json`, writing the defaults first if it doesn't exist so
 /// there's a file to edit. Missing keys fall back to defaults; a broken file
 /// is reported and ignored rather than stopping the app.
-pub fn load_config(dir: &Path) -> Config {
-    let path = dir.join("config.json");
+pub fn load_settings(dir: &Path) -> Settings {
+    let path = dir.join(FILE);
     match fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text).unwrap_or_else(|e| {
             eprintln!(
                 "[config] {} is invalid ({e}); using defaults",
                 path.display()
             );
-            Config::default()
+            Settings::default()
         }),
         Err(_) => {
-            let cfg = Config::default();
-            let written = fs::create_dir_all(dir).and_then(|()| {
-                fs::write(
-                    &path,
-                    serde_json::to_string_pretty(&cfg).unwrap_or_default(),
-                )
-            });
-            if let Err(e) = written {
+            let settings = Settings::default();
+            if let Err(e) = save_settings(dir, &settings) {
                 eprintln!("[config] couldn't write {}: {e}", path.display());
             }
-            cfg
+            settings
         }
     }
 }
+
+/// Atomic write: a crash mid-save can't leave a half-written file.
+pub fn save_settings(dir: &Path, settings: &Settings) -> std::io::Result<()> {
+    fs::create_dir_all(dir)?;
+    let tmp = dir.join(format!("{FILE}.tmp"));
+    fs::write(&tmp, serde_json::to_string_pretty(settings)?)?;
+    fs::rename(tmp, dir.join(FILE))
+}
+
+const FILE: &str = "config.json";
 
 /// Append-only JSON lines: one per alarm, for "you dozed 3x today" and
 /// for tuning thresholds.
@@ -86,9 +91,9 @@ mod tests {
     }
 
     #[test]
-    fn config_round_trip_and_partial_files() {
+    fn settings_round_trip_and_partial_files() {
         let dir = temp_dir("config");
-        assert_eq!(load_config(&dir), Config::default());
+        assert_eq!(load_settings(&dir), Settings::default());
         assert!(
             dir.join("config.json").exists(),
             "defaults written for editing"
@@ -96,16 +101,27 @@ mod tests {
 
         fs::write(
             dir.join("config.json"),
-            r#"{ "ear_closed": 0.17, "pitch_down": -20.0 }"#,
+            r#"{ "ear_closed": 0.17, "onboarded": true }"#,
         )
         .unwrap();
-        let cfg = load_config(&dir);
-        assert_eq!(cfg.ear_closed, 0.17);
-        assert_eq!(cfg.pitch_down, -20.0);
-        assert_eq!(cfg.eyes_closed_for, Config::default().eyes_closed_for);
+        let s = load_settings(&dir);
+        assert_eq!(s.engine.ear_closed, 0.17);
+        assert!(s.onboarded);
+        assert_eq!(
+            s.engine.eyes_closed_for,
+            Settings::default().engine.eyes_closed_for
+        );
+
+        let changed = Settings {
+            meeting_pause: false,
+            ..s
+        };
+        save_settings(&dir, &changed).unwrap();
+        assert_eq!(load_settings(&dir), changed);
+        assert!(!dir.join("config.json.tmp").exists());
 
         fs::write(dir.join("config.json"), "{ not json").unwrap();
-        assert_eq!(load_config(&dir), Config::default());
+        assert_eq!(load_settings(&dir), Settings::default());
     }
 
     #[test]

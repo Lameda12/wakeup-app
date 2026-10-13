@@ -516,3 +516,101 @@ fn test_alarm_can_be_triggered_and_dismissed() {
     s.run(2.0, |_| Some(OPEN));
     assert!(s.engine.try_dismiss(s.t).is_ok());
 }
+
+#[test]
+fn idle_rule_can_be_turned_off() {
+    let mut s = Sim::with(Config {
+        idle_nudge_after: 0.0,
+        ..Config::default()
+    });
+    s.typing(1.0).run(600.0, |_| Some(OPEN));
+    assert!(!s.has(Event::NudgeShown));
+    s.run(5.0, |_| Some(CLOSED));
+    assert_eq!(
+        s.first_alarm().1,
+        AlarmReason::EyesClosed,
+        "face rules still on"
+    );
+}
+
+#[test]
+fn meeting_pauses_and_resumes() {
+    let mut s = Sim::new();
+    s.typing(1.0);
+    assert_eq!(
+        s.engine.set_external_pause(PauseReason::Meeting, true),
+        vec![Event::Paused(PauseReason::Meeting)]
+    );
+    // Re-checking while still in the meeting is a no-op.
+    assert!(
+        s.engine
+            .set_external_pause(PauseReason::Meeting, true)
+            .is_empty()
+    );
+    s.run(600.0, |_| Some(CLOSED));
+    assert!(s.alarms().is_empty());
+    assert_eq!(
+        s.engine.set_external_pause(PauseReason::Meeting, false),
+        vec![Event::Resumed]
+    );
+    assert_eq!(s.state(), State::Active);
+}
+
+#[test]
+fn meeting_ending_does_not_lift_a_manual_pause() {
+    let mut s = Sim::new();
+    s.engine.pause(PauseReason::Manual, Some(900.0)).unwrap();
+    assert!(
+        s.engine
+            .set_external_pause(PauseReason::Meeting, true)
+            .is_empty(),
+        "already paused"
+    );
+    assert!(
+        s.engine
+            .set_external_pause(PauseReason::Meeting, false)
+            .is_empty()
+    );
+    assert!(matches!(
+        s.state(),
+        State::Paused {
+            reason: PauseReason::Manual,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn meeting_cannot_silence_a_ringing_alarm() {
+    let mut s = Sim::new();
+    s.typing(1.0).run(12.0, |_| Some(CLOSED));
+    assert!(
+        s.engine
+            .set_external_pause(PauseReason::Meeting, true)
+            .is_empty()
+    );
+    assert!(matches!(s.state(), State::Alarm { .. }));
+}
+
+#[test]
+fn schedule_and_meeting_hand_over() {
+    let mut s = Sim::new();
+    s.engine.set_external_pause(PauseReason::Schedule, true);
+    s.engine.set_external_pause(PauseReason::Meeting, true);
+    assert!(matches!(
+        s.state(),
+        State::Paused {
+            reason: PauseReason::Schedule,
+            ..
+        }
+    ));
+    // Work hours start mid-meeting: schedule lifts, the next meeting check pauses again.
+    assert_eq!(
+        s.engine.set_external_pause(PauseReason::Schedule, false),
+        vec![Event::Resumed]
+    );
+    assert_eq!(
+        s.engine.set_external_pause(PauseReason::Meeting, true),
+        vec![Event::Paused(PauseReason::Meeting)]
+    );
+}

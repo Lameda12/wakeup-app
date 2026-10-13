@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -8,7 +9,9 @@ use wakeup_core::{AlarmReason, Engine};
 use wakeup_platform::volume::VolumeGuard;
 
 use crate::audio::Audio;
-use crate::store::EventLog;
+use crate::calibration;
+use crate::settings::Settings;
+use crate::store::{self, EventLog};
 
 /// What the alarm windows show.
 #[derive(Debug, Clone, Serialize)]
@@ -29,26 +32,49 @@ pub struct NudgeView {
 
 pub struct Shared {
     pub engine: Engine,
+    pub settings: Settings,
+    config_dir: PathBuf,
     started: Instant,
     pub alarm: Option<AlarmView>,
     pub nudge: Option<NudgeView>,
     pub volume: Option<VolumeGuard>,
+    /// While set, the engine is frozen and the camera feeds calibration.
+    pub calibration: Option<calibration::Session>,
 }
 
 impl Shared {
-    pub fn new(engine: Engine) -> Self {
+    pub fn new(settings: Settings, config_dir: PathBuf) -> Self {
         Self {
-            engine,
+            engine: Engine::new(settings.engine.clone()),
+            settings,
+            config_dir,
             started: Instant::now(),
             alarm: None,
             nudge: None,
             volume: None,
+            calibration: None,
         }
     }
 
     /// Engine clock: monotonic seconds since launch.
     pub fn now(&self) -> f64 {
         self.started.elapsed().as_secs_f64()
+    }
+
+    /// Writes settings to disk and points the engine at the new thresholds.
+    pub fn apply_settings(&mut self, settings: Settings) -> Result<(), String> {
+        settings.validate()?;
+        store::save_settings(&self.config_dir, &settings)
+            .map_err(|e| format!("couldn't save settings: {e}"))?;
+        self.engine.set_config(settings.engine.clone());
+        self.settings = settings;
+        Ok(())
+    }
+
+    /// Fresh engine state (after calibration): nothing carried over from
+    /// before the camera was taken over.
+    pub fn restart_engine(&mut self) {
+        self.engine = Engine::new(self.settings.engine.clone());
     }
 }
 

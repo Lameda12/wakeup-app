@@ -1,6 +1,6 @@
 # wakeup: app design
 
-Status: **approved 2026-10-13. M0 waiting on a run on your Mac; M1 built.**
+Status: **approved 2026-10-13. M0 waiting on a run on your Mac; M1 and M2 built.**
 
 Decisions: Rust core + Tauri, macOS first then Linux (GNOME, KDE, wlroots/tiling), camera only on when input is idle, "still here?" nudge before the idle alarm, direct download + Lemon Squeezy license keys. Linux test machine: decide at M4.
 
@@ -105,6 +105,8 @@ GNOME is the weakest target: it can't guarantee the overlay covers a fullscreen 
 
 All processing on-device. No frames saved, nothing sent anywhere except one license check. Stored locally: settings + an event log (trigger type, time, seconds to dismiss) for "you dozed 3x today" in the tray menu and for tuning thresholds. One permission on macOS: Camera.
 
+**ONNX Runtime telemetry (found in M2).** Microsoft's official ONNX Runtime builds include a usage-telemetry client that posts to `mobile.events.data.microsoft.com` while models run. Measured on the 1.31 Linux build: about 3 connection attempts per 25s, unaffected by the API's own disable switch. Only the `ORT_DISABLE_TELEMETRY` environment variable stops it (0 attempts in 30s of the real app running), so both binaries set it as the first line of `main`, before any thread starts. Whether the macOS binaries `ort` downloads contain the same client is unverified; the switch is harmless either way. Recheck this on every ONNX Runtime upgrade.
+
 ## 9. Distribution
 
 - **macOS:** Developer ID signing + notarization ($99/yr Apple Developer account), DMG, Tauri's built-in signed updater.
@@ -139,3 +141,11 @@ Built: `wakeup-core` engine (35 scenario tests), the Tauri tray app (10 Hz monit
 Verified here: the whole alarm flow runs in the real app on Linux under a virtual display (alarm fires, wrong text is highlighted, the correct phrase dismisses, events are logged). Not verified: anything on real macOS hardware, including window level over full-screen apps, the camera prompt from the .app bundle, and the volume override.
 
 Known M1 limits: thresholds come from `config.json` (no settings screen or calibration UI yet), the nudge window may take keyboard focus on macOS, and Linux has no idle time yet (camera stays on, no idle rule) until M4.
+
+## 13. M2 status
+
+Built: first-run setup (welcome, guided 15-second calibration with a live face meter and a result scale, "open at login"), recalibration from settings, a settings window (eyes/head-down timings, nudge on/off and timing, camera-only-when-idle, pause during calls, active hours with overnight support, open at login), meeting auto-pause from microphone use (CoreAudio on macOS, PulseAudio/PipeWire on Linux), active-hours pausing, launch at login (official Tauri autostart plugin), and a nudge window that can't take keyboard focus. External pauses never override a manual pause or a ringing alarm.
+
+Verified here: the whole first-run flow in the real app on Linux with the real face models, driven by a still-photo fake camera (an eyes-open photo, then the same photo with eyes painted shut): calibration recorded 40 samples per phase, produced thresholds, and saved `onboarded`/`calibrated` to `config.json`. 78 tests across the workspace.
+
+Not verified: everything needing real hardware. Calibration on a real face (painted-on closed eyes only dropped EAR from 0.32 to 0.24, a narrower gap than real closed eyes should give `[Inference]`), the CoreAudio mic check during a real call, and the login item on macOS.

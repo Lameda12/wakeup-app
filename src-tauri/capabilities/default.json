@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Alarm and nudge windows: receive events and call the app's commands.",
-  "windows": ["alarm-*", "nudge"],
-  "permissions": ["core:default"]
+  "description": "App windows: receive events, call the app's commands, and hide themselves (settings/onboarding are reused, never closed).",
+  "windows": ["alarm-*", "nudge", "settings", "onboarding"],
+  "permissions": ["core:default", "core:window:allow-hide"]
 }

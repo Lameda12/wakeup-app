@@ -6,6 +6,7 @@ use wakeup_core::{AlarmReason, PauseReason, State};
 
 use crate::monitor::apply;
 use crate::state::Ctx;
+use crate::windows;
 
 const ICON: &[u8] = include_bytes!("../icons/tray.png");
 
@@ -22,6 +23,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
             &MenuItem::with_id(app, "resume", "Resume", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "test", "Test alarm", true, None::<&str>)?,
+            &MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", "Quit wakeup", true, None::<&str>)?,
         ],
@@ -56,6 +58,11 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
                 .unwrap_or_default(),
             "resume" => shared.engine.resume(),
             "test" => shared.engine.trigger(now, AlarmReason::EyesClosed),
+            "settings" => {
+                drop(shared);
+                windows::open_settings(app);
+                return;
+            }
             "quit" => {
                 drop(shared);
                 app.exit(0);
@@ -74,6 +81,14 @@ pub fn status_label(state: &State, now: f64) -> String {
         State::Nudge { .. } => "Still here?".into(),
         State::Alarm { .. } => "Alarm ringing".into(),
         State::Away => "Away · camera idle".into(),
+        State::Paused {
+            reason: PauseReason::Meeting,
+            ..
+        } => "Paused · on a call".into(),
+        State::Paused {
+            reason: PauseReason::Schedule,
+            ..
+        } => "Off · outside active hours".into(),
         State::Paused {
             until: Some(until), ..
         } => {

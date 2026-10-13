@@ -1,8 +1,9 @@
 //! OS integration: input idle time, volume override, and keeping the alarm
-//! window above everything. Mic-in-use (meeting detection) lands in M2.
+//! window above everything, and whether a call is using the microphone.
 
 #[cfg(target_os = "macos")]
 pub mod macos;
+pub mod mic;
 pub mod volume;
 
 /// Seconds since the last keyboard, mouse or trackpad event, or `None` where

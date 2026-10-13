@@ -26,6 +26,9 @@ fn build(app: &AppHandle, label: &str, view: &str) -> tauri::Result<WebviewWindo
     .visible_on_all_workspaces(true)
     .shadow(false)
     .focused(false)
+    // The nudge must never take the keyboard: answering it means touching a
+    // key in whatever you were doing.
+    .focusable(label != NUDGE)
     .visible(false)
     .build()
 }
@@ -125,4 +128,52 @@ fn raise(app: &AppHandle, window: &WebviewWindow) {
     }
     #[cfg(not(target_os = "macos"))]
     let _ = (app, window);
+}
+
+/// A normal app window (settings, onboarding): created on demand, reused,
+/// hidden rather than closed.
+fn open_panel(app: &AppHandle, label: &str, view: &str, size: (f64, f64)) {
+    let window = match app.get_webview_window(label) {
+        Some(w) => w,
+        None => {
+            let built = WebviewWindowBuilder::new(
+                app,
+                label,
+                WebviewUrl::App(format!("index.html#{view}").into()),
+            )
+            .title("wakeup")
+            .inner_size(size.0, size.1)
+            .resizable(false)
+            .center()
+            .build();
+            match built {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[windows] {label}: {e}");
+                    return;
+                }
+            }
+        }
+    };
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
+pub fn open_settings(app: &AppHandle) {
+    open_panel(app, "settings", "settings", (560.0, 760.0));
+}
+
+pub fn open_onboarding(app: &AppHandle, view: &str) {
+    // Re-point an existing window if switching between full setup and recalibration.
+    if let Some(w) = app.get_webview_window("onboarding") {
+        let _ = w.eval(format!("location.hash = '{view}'; location.reload();"));
+    }
+    open_panel(app, "onboarding", view, (640.0, 620.0));
+}
+
+pub fn close(app: &AppHandle, label: &str) {
+    if let Some(w) = app.get_webview_window(label) {
+        let _ = w.hide();
+    }
 }

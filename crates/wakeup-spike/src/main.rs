@@ -61,6 +61,8 @@ pub struct CamArgs {
 }
 
 fn main() -> Result<()> {
+    // SAFETY: first statement of main; no other threads exist yet.
+    unsafe { wakeup_vision::disable_onnx_telemetry() };
     match Cli::parse().cmd {
         Cmd::Session { tag, out, cam } => session::run(&tag, &out, cam),
         Cmd::Live { csv, cam } => live(csv, cam),
