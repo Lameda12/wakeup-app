@@ -1,0 +1,9 @@
+[package]
+name = "wakeup-core"
+description = "The wakeup state machine: idle time + face samples in, alarms out. Pure, no I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
