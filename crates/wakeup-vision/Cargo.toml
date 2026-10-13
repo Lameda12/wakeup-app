@@ -1,0 +1,21 @@
+[package]
+name = "wakeup-vision"
+description = "Camera frames -> face landmarks -> eye openness and head pitch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["download-binaries"]
+# Fetch a prebuilt ONNX Runtime at build time (normal dev/release builds).
+download-binaries = ["ort/download-binaries", "ort/copy-dylibs", "ort/tls-native"]
+# Load libonnxruntime at runtime from ORT_DYLIB_PATH instead (offline/CI boxes).
+load-dynamic = ["ort/load-dynamic"]
+camera = ["dep:nokhwa"]
+
+[dependencies]
+anyhow.workspace = true
+image.workspace = true
+ort.workspace = true
+nokhwa = { workspace = true, optional = true }

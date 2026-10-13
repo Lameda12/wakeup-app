@@ -1,8 +1,8 @@
-# wakeup: app design proposal
+# wakeup: app design
 
-Status: **draft v2, awaiting approval**. Nothing here is built yet.
+Status: **approved 2026-10-13. M0 in progress.**
 
-Decided so far: Rust core + Tauri, macOS first then Linux (GNOME, KDE, wlroots/tiling), "still here?" nudge before the idle alarm, direct download + license key.
+Decisions: Rust core + Tauri, macOS first then Linux (GNOME, KDE, wlroots/tiling), camera only on when input is idle, "still here?" nudge before the idle alarm, direct download + Lemon Squeezy license keys. Linux test machine: decide at M4.
 
 Tags: `[Inference]` = reasoned, not confirmed. `[Unverified]` = needs a spike to confirm. `[Speculation]` = a guess to measure.
 
@@ -44,6 +44,7 @@ PAUSED: manual pause (15/30/60 min), meeting detected, or outside active hours
 ```
 
 - **AWAY:** walking away from the desk never fires the alarm.
+- **Face lost mid-droop is not AWAY.** The detector can't find a face turned fully sideways (head down on the desk, cheek on the arm). Found in M0 testing: tracking follows a tilt up to ~60° within 2-3 frames, but at 90° the face is lost. So if the face disappears while idle and the last samples showed eyes closing, pitch dropping or roll growing, treat it as dozing, not AWAY.
 - **NUDGE:** quiet "still here?" card with a soft chime. Any key or trackpad movement clears it.
 - **Meetings:** auto-pause while another app is using the mic.
 
@@ -68,7 +69,7 @@ models/               face detector + face landmark .onnx files (+ licenses)
 
 ## 5. Detection
 
-**Face models.** ONNX Runtime (`ort` crate) running MediaPipe's face detector + face landmark models (468 3D points), converted to ONNX. Same models on both OSes, Apache 2.0 licensed `[Inference, check license on the exact files]`. On macOS, ONNX Runtime's CoreML backend can push it onto Apple's GPU/Neural Engine `[Inference]`. Fallback if this is too slow or noisy: Apple Vision on macOS behind the same `FaceSample` interface.
+**Face models.** ONNX Runtime (`ort` crate) running MediaPipe's face detector + face landmark models (468 3D points), converted to ONNX (done: outputs match the TFLite originals to ~1e-4, see `models/README.md`). Same models on both OSes, Apache 2.0 licensed `[Unverified, check the model cards]`. On macOS, ONNX Runtime's CoreML backend can push it onto Apple's GPU/Neural Engine `[Inference]`. Fallback if this is too slow or noisy: Apple Vision on macOS behind the same `FaceSample` interface.
 
 **Eyes closed.** Eye aspect ratio (EAR) from the eyelid landmarks, averaged over both eyes. "Closed" = EAR below your threshold for ≥ 80% of frames in a 2.5s window, so normal blinks (~0.1-0.4s) can't trigger it. The threshold comes from a 15s calibration in onboarding (5s eyes open, 3s eyes closed, take the midpoint).
 
@@ -122,8 +123,8 @@ Performance target: < 1% CPU in ACTIVE, < 8% in WATCHING on an M2 `[Speculation,
 | **M3 ship macOS** | signing, notarization, DMG, updater, license key, CI release | download link works from your waitlist page |
 | **M4 Linux** | platform layer for GNOME, KDE, wlroots, X11; AppImage, .deb, AUR | alarm fires and dismisses on Ubuntu GNOME, KDE and Hyprland |
 
-## 11. Open questions
+## 11. M0 status
 
-1. Camera: only on when you stop typing (recommended) or always on?
-2. License keys: Lemon Squeezy (handles sales tax/VAT for you, recommended) or Stripe (you already have a payment link)?
-3. Linux testing: what machine? Dual-booting the Windows laptop is the easiest way. A VM makes webcam passthrough painful.
+Built: `wakeup-vision` (detector + face mesh + EAR/pitch/roll, frame-to-frame tracking), `wakeup-platform` (macOS idle time), `wakeup-spike` CLI with a guided calibration session. 15 tests, including end-to-end runs of the real models on a test face (open-eye EAR ~0.32, roll correct under mirror and 45° tilt, re-detects after the face leaves).
+
+Not yet verified (needs your Mac): closed-eye EAR, head-down pitch sign and size, camera capture on macOS, idle time, CPU on an M2. That's what `wakeup-spike session` measures. See README.

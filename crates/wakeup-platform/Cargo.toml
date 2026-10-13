@@ -1,0 +1,9 @@
+[package]
+name = "wakeup-platform"
+description = "OS integration: input idle time (more in later milestones)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]

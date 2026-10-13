@@ -1,0 +1,21 @@
+[package]
+name = "wakeup-spike"
+description = "M0 spike: measure eye openness, head pitch and idle time on real hardware"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = ["download-binaries", "camera"]
+download-binaries = ["wakeup-vision/download-binaries"]
+load-dynamic = ["wakeup-vision/load-dynamic"]
+camera = ["wakeup-vision/camera"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+image.workspace = true
+libc.workspace = true
+wakeup-platform.workspace = true
+wakeup-vision.workspace = true

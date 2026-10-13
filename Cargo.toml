@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+libc = "0.2"
+nokhwa = { version = "0.10", features = ["input-native"] }
+ort = { version = "=2.0.0-rc.14", default-features = false, features = ["std", "api-31"] }
+wakeup-platform = { path = "crates/wakeup-platform" }
+wakeup-vision = { path = "crates/wakeup-vision", default-features = false }
+
+# Inference is unusably slow unoptimized; keep deps fast even in dev builds.
+[profile.dev.package."*"]
+opt-level = 3
